@@ -139,6 +139,10 @@
   .gal-item .meta .name { font-size: 10px; color: var(--text);
                            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .gal-item .meta .time { font-size: 10px; color: var(--muted); }
+  .dl-btn { flex-shrink: 0; font-size: 10px; padding: 3px 8px;
+            background: #1e3a5f; color: #60a5fa; border: 1px solid #2563eb;
+            border-radius: 3px; text-decoration: none; white-space: nowrap; }
+  .dl-btn:hover { background: #2563eb; color: #fff; }
 
   /* 로그 */
   #log-box {
@@ -615,7 +619,8 @@ async function updateImages() {
       <div class="meta">
         <div class="name">${it.name}</div>
         <div class="time">${it.mtime}</div>
-      </div>`;
+      </div>
+      <a class="dl-btn" href="/api/download/${it.ts}" download="${it.ts}.zip" onclick="event.stopPropagation()">다운로드</a>`;
     el.onclick = () => {
       document.getElementById('thermal-img').src = it.url;
       document.getElementById('thermal-img').style.display = '';

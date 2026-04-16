@@ -7,8 +7,10 @@ HTTP + Radiometric JPEG 방식 (Spinnaker SDK 불필요)
 
 import asyncio
 import base64
+import io
 import threading
 import time
+import zipfile
 from datetime import datetime
 from pathlib import Path
 
@@ -458,11 +460,40 @@ async def api_status():
 @app.get("/api/images")
 async def api_images():
     files = sorted(CAPTURED_DIR.glob("*_colormap.png"), reverse=True)[:20]
-    items = [{"name": f.name,
-              "url":  f"/captured/{f.name}",
-              "mtime": datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")}
-             for f in files]
+    items = []
+    for f in files:
+        ts = f.name.replace("_colormap.png", "")
+        items.append({
+            "name":  f.name,
+            "ts":    ts,
+            "url":   f"/captured/{f.name}",
+            "mtime": datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+        })
     return {"items": items}
+
+
+@app.get("/api/download/{ts}")
+async def api_download(ts: str):
+    """캡처 파일 전체를 ZIP으로 다운로드"""
+    suffixes = ["_colormap.png", "_temperature.csv", "_metadata.json",
+                "_rjpeg.jpg", "_visual.png", "_raw.npy"]
+    buf = io.BytesIO()
+    found = False
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for suffix in suffixes:
+            p = CAPTURED_DIR / f"{ts}{suffix}"
+            if p.exists():
+                zf.write(p, p.name)
+                found = True
+    if not found:
+        return JSONResponse({"ok": False, "msg": "파일 없음"}, 404)
+    buf.seek(0)
+    from fastapi.responses import StreamingResponse as SR
+    return SR(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={ts}.zip"},
+    )
 
 
 @app.get("/api/ports")
