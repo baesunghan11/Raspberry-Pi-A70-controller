@@ -31,8 +31,7 @@ BASE_DIR     = Path(__file__).parent
 CAPTURED_DIR = BASE_DIR / "captured"
 CAPTURED_DIR.mkdir(exist_ok=True)
 
-templates = Jinja2Templates(directory=str(BASE_DIR / "templates"), autoescape=False)
-templates.env.encoding = "utf-8"
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 app.mount("/captured", StaticFiles(directory=str(CAPTURED_DIR)), name="captured")
 
 # ─────────────────────────────────────────────
