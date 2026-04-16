@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# 캡처된 데이터 (용량 큼)
+captured/
+
+# 시스템
+.DS_Store
+Thumbs.db

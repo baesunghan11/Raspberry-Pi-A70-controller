@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FLIR A70 열화상 시스템</title>
+<style>
+  :root {
+    --bg:      #1a1d23;
+    --panel:   #22262e;
+    --border:  #2e3340;
+    --accent:  #00aaff;
+    --green:   #00cc66;
+    --red:     #ff4444;
+    --yellow:  #ffcc00;
+    --text:    #d0d6e0;
+    --muted:   #6b7385;
+    --radius:  6px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif;
+         font-size: 13px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ── 툴바 ── */
+  #toolbar {
+    background: #13161c;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 14px; flex-shrink: 0;
+  }
+  #toolbar h1 { font-size: 14px; font-weight: 600; color: var(--accent); margin-right: 8px; }
+  .tb-sep { width: 1px; height: 24px; background: var(--border); margin: 0 4px; }
+  .badge {
+    font-size: 11px; padding: 2px 8px; border-radius: 10px;
+    background: var(--border); color: var(--muted);
+  }
+  .badge.on { background: #003322; color: var(--green); }
+  button {
+    background: #2a2f3a; border: 1px solid var(--border); color: var(--text);
+    padding: 5px 14px; border-radius: var(--radius); cursor: pointer; font-size: 12px;
+    transition: background 0.15s;
+  }
+  button:hover { background: #363d4d; }
+  button.primary { background: #003d5c; border-color: var(--accent); color: var(--accent); }
+  button.primary:hover { background: #005580; }
+  button.danger  { background: #3a1a1a; border-color: var(--red); color: var(--red); }
+  button.success { background: #003322; border-color: var(--green); color: var(--green); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── 메인 레이아웃 ── */
+  #main { display: flex; flex: 1; overflow: hidden; }
+
+  /* ── 왼쪽 사이드바 ── */
+  #sidebar {
+    width: 210px; min-width: 210px;
+    background: var(--panel); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow-y: auto;
+  }
+  .section { border-bottom: 1px solid var(--border); padding: 10px 12px; }
+  .section h3 { font-size: 11px; text-transform: uppercase; color: var(--muted);
+                letter-spacing: 0.06em; margin-bottom: 8px; }
+  .field { margin-bottom: 7px; }
+  .field label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+  .field input, .field select {
+    width: 100%; background: #1a1d23; border: 1px solid var(--border);
+    color: var(--text); padding: 4px 7px; border-radius: 4px; font-size: 12px;
+  }
+  .row2 { display: flex; gap: 6px; }
+  .row2 .field { flex: 1; }
+  .full-btn { width: 100%; margin-top: 4px; }
+  .info-row { display: flex; justify-content: space-between;
+              font-size: 11px; margin-bottom: 3px; }
+  .info-row span:first-child { color: var(--muted); }
+  .info-row span:last-child  { color: var(--text); font-weight: 500; }
+
+  /* ── 중앙 뷰어 ── */
+  #viewer {
+    flex: 1; display: flex; flex-direction: column; overflow: hidden;
+    background: #16191f;
+  }
+  .tab-bar {
+    display: flex; border-bottom: 1px solid var(--border);
+    background: var(--panel); flex-shrink: 0;
+  }
+  .tab {
+    padding: 8px 18px; cursor: pointer; font-size: 12px; color: var(--muted);
+    border-bottom: 2px solid transparent;
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .img-pane { flex: 1; display: flex; align-items: center; justify-content: center;
+              overflow: hidden; padding: 12px; }
+  .img-pane img { max-width: 100%; max-height: 100%; object-fit: contain;
+                  border-radius: 4px; }
+  .img-pane .placeholder {
+    color: var(--muted); text-align: center; line-height: 2;
+  }
+  #stream-pane { display: none; flex: 1; align-items: center;
+                 justify-content: center; overflow: hidden; padding: 12px; }
+  #stream-pane img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; }
+  #tab-thermal-pane { display: flex; }
+  #tab-visual-pane  { display: none; }
+
+  /* ── 오른쪽 패널 ── */
+  #right {
+    width: 230px; min-width: 230px;
+    background: var(--panel); border-left: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow-y: auto;
+  }
+
+  /* 온도 통계 */
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 0; }
+  .stat-cell { background: #1a1d23; border-radius: 4px; padding: 8px;
+               text-align: center; border: 1px solid var(--border); }
+  .stat-cell .label { font-size: 10px; color: var(--muted); margin-bottom: 3px; }
+  .stat-cell .value { font-size: 18px; font-weight: 700; color: var(--text); }
+  .stat-cell .value.hot  { color: #ff6644; }
+  .stat-cell .value.cool { color: #44aaff; }
+  .stat-cell .unit  { font-size: 10px; color: var(--muted); }
+
+  /* Arduino 센서 */
+  .ard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 6px 0; }
+  .ard-cell { background: #1a1d23; border: 1px solid var(--border);
+              border-radius: 4px; padding: 7px; text-align: center; }
+  .ard-cell .lbl { font-size: 10px; color: var(--muted); margin-bottom: 2px; }
+  .ard-cell .val { font-size: 15px; font-weight: 600; color: var(--text); }
+  .ard-cell .unit { font-size: 10px; color: var(--muted); }
+  .ard-time { font-size: 10px; color: var(--muted); text-align: right; margin-top: 4px; }
+
+  /* 이미지 갤러리 */
+  #gallery { display: flex; flex-direction: column; gap: 4px; }
+  .gal-item { display: flex; align-items: center; gap: 8px;
+              padding: 5px 8px; background: #1a1d23; border-radius: 4px;
+              border: 1px solid var(--border); cursor: pointer; }
+  .gal-item:hover { border-color: var(--accent); }
+  .gal-item img { width: 48px; height: 36px; object-fit: cover; border-radius: 3px; }
+  .gal-item .meta { flex: 1; overflow: hidden; }
+  .gal-item .meta .name { font-size: 10px; color: var(--text);
+                           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gal-item .meta .time { font-size: 10px; color: var(--muted); }
+
+  /* 로그 */
+  #log-box {
+    font-size: 11px; color: var(--muted); overflow-y: auto; max-height: 140px;
+    line-height: 1.6; font-family: monospace;
+  }
+  #log-box div { padding: 1px 0; }
+  #log-box div:last-child { color: var(--text); }
+
+  /* 타임스탬프 */
+  #last-ts { font-size: 11px; color: var(--muted); padding: 4px 12px 0;
+             border-top: 1px solid var(--border); }
+  #progress-bar {
+    height: 3px; background: var(--border); margin: 0;
+    border-radius: 0;
+  }
+  #progress-inner {
+    height: 100%; background: var(--accent); width: 0%;
+    transition: width 0.5s linear;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── 툴바 ── -->
+<div id="toolbar">
+  <h1>FLIR A70 열화상 시스템</h1>
+  <div class="tb-sep"></div>
+  <span id="badge-cam" class="badge">카메라 미연결</span>
+  <button id="btn-cam-connect" class="primary" onclick="camConnect()">카메라 연결</button>
+  <button id="btn-cam-disconnect" style="display:none" class="danger" onclick="camDisconnect()">연결 해제</button>
+  <div class="tb-sep"></div>
+  <span id="badge-ard" class="badge">Arduino 미연결</span>
+  <button id="btn-ard-connect" onclick="ardConnect()">Arduino 연결</button>
+  <button id="btn-ard-disconnect" style="display:none" class="danger" onclick="ardDisconnect()">해제</button>
+  <div class="tb-sep"></div>
+  <button id="btn-capture" class="primary" onclick="doCapture()" disabled>촬영</button>
+  <button id="btn-stream-start" onclick="streamStart()" disabled>▶ 스트리밍</button>
+  <button id="btn-stream-stop"  style="display:none" class="danger" onclick="streamStop()">■ 중지</button>
+  <div style="margin-left:auto; font-size:11px; color:var(--muted)" id="status-text">대기</div>
+</div>
+<div id="progress-bar"><div id="progress-inner"></div></div>
+
+<!-- ── 메인 ── -->
+<div id="main">
+
+  <!-- 왼쪽 사이드바 -->
+  <div id="sidebar">
+
+    <!-- 자동 촬영 -->
+    <div class="section">
+      <h3>자동 촬영</h3>
+      <div class="row2">
+        <div class="field">
+          <label>간격 (초)</label>
+          <input id="auto-interval" type="number" value="60" min="1">
+        </div>
+        <div class="field">
+          <label>횟수 (빈칸=무제한)</label>
+          <input id="auto-count" type="number" placeholder="∞" min="1">
+        </div>
+      </div>
+      <button id="btn-auto-start" class="full-btn success" onclick="autoStart()" disabled>▶ 자동 촬영 시작</button>
+      <button id="btn-auto-stop"  class="full-btn danger"  onclick="autoStop()" style="display:none">■ 자동 촬영 중지</button>
+      <div id="auto-status" style="font-size:11px; color:var(--muted); margin-top:6px;"></div>
+    </div>
+
+    <!-- 스트리밍 설정 -->
+    <div class="section">
+      <h3>스트리밍</h3>
+      <div class="field">
+        <label>FPS (0.1 ~ 25)</label>
+        <input id="stream-fps" type="number" value="2" min="0.1" max="25" step="0.5">
+      </div>
+    </div>
+
+    <!-- Arduino 설정 -->
+    <div class="section">
+      <h3>Arduino 포트</h3>
+      <div class="field">
+        <label>포트</label>
+        <input id="ard-port" type="text" placeholder="/dev/ttyACM0">
+      </div>
+      <div class="field">
+        <label>Baud Rate</label>
+        <select id="ard-baud">
+          <option value="9600" selected>9600</option>
+          <option value="19200">19200</option>
+          <option value="115200">115200</option>
+        </select>
+      </div>
+      <button class="full-btn" onclick="detectPort()">포트 자동 감지</button>
+    </div>
+
+    <!-- 카메라 연결 설정 -->
+    <div class="section">
+      <h3>카메라 IP 설정</h3>
+      <div class="field">
+        <label>카메라 IP</label>
+        <input id="cam-ip" type="text" value="192.168.0.100" placeholder="192.168.0.100">
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>포트</label>
+          <input id="cam-port" type="number" value="80" min="1" max="65535">
+        </div>
+        <div class="field">
+          <label>스냅샷 경로 (선택)</label>
+          <input id="cam-snapshot" type="text" placeholder="/snapshot.jpg">
+        </div>
+      </div>
+    </div>
+
+    <!-- 카메라 정보 -->
+    <div class="section">
+      <h3>카메라 정보</h3>
+      <div class="info-row"><span>IP</span><span id="info-ip">—</span></div>
+      <div class="info-row"><span>스냅샷 URL</span><span id="info-snap" style="font-size:10px;word-break:break-all">—</span></div>
+      <div class="info-row"><span>해상도</span><span id="info-res">—</span></div>
+    </div>
+
+  </div>
+
+  <!-- 중앙 뷰어 -->
+  <div id="viewer">
+    <div class="tab-bar">
+      <div class="tab active" id="tab-thermal" onclick="switchTab('thermal')">열화상</div>
+      <div class="tab"        id="tab-visual"  onclick="switchTab('visual')">실화상</div>
+      <div class="tab"        id="tab-stream"  onclick="switchTab('stream')">라이브</div>
+    </div>
+
+    <div class="img-pane" id="tab-thermal-pane">
+      <div id="thermal-placeholder" class="placeholder">
+        카메라를 연결하고 촬영 버튼을 누르세요
+      </div>
+      <img id="thermal-img" style="display:none">
+    </div>
+
+    <div class="img-pane" id="tab-visual-pane">
+      <div id="visual-placeholder" class="placeholder">
+        실화상 없음
+      </div>
+      <img id="visual-img" style="display:none">
+    </div>
+
+    <div id="stream-pane">
+      <img id="stream-img" src="" alt="stream">
+    </div>
+
+    <div id="last-ts"></div>
+  </div>
+
+  <!-- 오른쪽 패널 -->
+  <div id="right">
+
+    <!-- 온도 통계 -->
+    <div class="section">
+      <h3>온도 통계 (열화상)</h3>
+      <div class="stat-grid">
+        <div class="stat-cell">
+          <div class="label">최고</div>
+          <div class="value hot" id="s-max">—</div>
+          <div class="unit">°C</div>
+        </div>
+        <div class="stat-cell">
+          <div class="label">최저</div>
+          <div class="value cool" id="s-min">—</div>
+          <div class="unit">°C</div>
+        </div>
+        <div class="stat-cell">
+          <div class="label">평균</div>
+          <div class="value" id="s-avg">—</div>
+          <div class="unit">°C</div>
+        </div>
+        <div class="stat-cell">
+          <div class="label">중앙값</div>
+          <div class="value" id="s-med">—</div>
+          <div class="unit">°C</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Arduino 환경 센서 -->
+    <div class="section">
+      <h3>환경 센서 (Arduino)</h3>
+      <div class="ard-grid">
+        <div class="ard-cell">
+          <div class="lbl">TC1 (열전대 1)</div>
+          <div class="val" id="a-tc1">—</div>
+          <div class="unit">°C</div>
+        </div>
+        <div class="ard-cell">
+          <div class="lbl">TC2 (열전대 2)</div>
+          <div class="val" id="a-tc2">—</div>
+          <div class="unit">°C</div>
+        </div>
+        <div class="ard-cell">
+          <div class="lbl">기온</div>
+          <div class="val" id="a-air">—</div>
+          <div class="unit">°C</div>
+        </div>
+        <div class="ard-cell">
+          <div class="lbl">습도</div>
+          <div class="val" id="a-rh">—</div>
+          <div class="unit">%</div>
+        </div>
+        <div class="ard-cell">
+          <div class="lbl">CJ1</div>
+          <div class="val" id="a-cj1" style="font-size:13px">—</div>
+          <div class="unit">°C</div>
+        </div>
+        <div class="ard-cell">
+          <div class="lbl">CJ2</div>
+          <div class="val" id="a-cj2" style="font-size:13px">—</div>
+          <div class="unit">°C</div>
+        </div>
+      </div>
+      <div class="ard-time" id="a-time">수신 없음</div>
+    </div>
+
+    <!-- 이벤트 로그 -->
+    <div class="section" style="flex:1">
+      <h3>이벤트 로그</h3>
+      <div id="log-box"></div>
+    </div>
+
+    <!-- 저장된 이미지 -->
+    <div class="section">
+      <h3>저장된 이미지</h3>
+      <div id="gallery"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── 상태 ──
+let streaming   = false;
+let autoRunning = false;
+let autoTotal   = null;
+let pollTimer   = null;
+
+// ── 탭 전환 ──
+function switchTab(t) {
+  ['thermal','visual','stream'].forEach(x => {
+    document.getElementById(`tab-${x}`).classList.toggle('active', x===t);
+  });
+  document.getElementById('tab-thermal-pane').style.display = t==='thermal' ? 'flex' : 'none';
+  document.getElementById('tab-visual-pane').style.display  = t==='visual'  ? 'flex' : 'none';
+  document.getElementById('stream-pane').style.display      = t==='stream'  ? 'flex' : 'none';
+  if (t === 'stream' && streaming) {
+    document.getElementById('stream-img').src = '/api/stream/feed?' + Date.now();
+  }
+}
+
+// ── 카메라 연결 ──
+async function camConnect() {
+  const ip           = document.getElementById('cam-ip').value.trim() || '192.168.0.100';
+  const port         = parseInt(document.getElementById('cam-port').value) || 80;
+  const snapshotPath = document.getElementById('cam-snapshot').value.trim() || null;
+  setStatus(`${ip} 연결 중...`);
+  const r = await fetch('/api/camera/connect', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ip, port, snapshot_path: snapshotPath})
+  });
+  const d = await r.json();
+  if (d.ok) {
+    document.getElementById('badge-cam').textContent = `카메라 ${ip}`;
+    document.getElementById('badge-cam').className = 'badge on';
+    document.getElementById('btn-cam-connect').style.display = 'none';
+    document.getElementById('btn-cam-disconnect').style.display = '';
+    document.getElementById('btn-capture').disabled = false;
+    document.getElementById('btn-stream-start').disabled = false;
+    document.getElementById('btn-auto-start').disabled = false;
+    document.getElementById('info-ip').textContent   = d.ip || '—';
+    document.getElementById('info-snap').textContent = d.snapshot_url || '—';
+    setStatus('카메라 연결됨');
+    addLog(`카메라 연결 — ${d.snapshot_url}`);
+  } else {
+    setStatus('연결 실패');
+    alert('카메라 연결 실패: ' + (d.msg || ''));
+  }
+}
+
+async function camDisconnect() {
+  await fetch('/api/camera/disconnect', {method:'POST'});
+  document.getElementById('badge-cam').textContent = '카메라 미연결';
+  document.getElementById('badge-cam').className = 'badge';
+  document.getElementById('btn-cam-connect').style.display = '';
+  document.getElementById('btn-cam-disconnect').style.display = 'none';
+  ['btn-capture','btn-stream-start','btn-auto-start'].forEach(id =>
+    document.getElementById(id).disabled = true);
+  setStatus('카메라 해제됨');
+}
+
+// ── Arduino 연결 ──
+async function ardConnect() {
+  const port = document.getElementById('ard-port').value.trim() || null;
+  const baud = parseInt(document.getElementById('ard-baud').value);
+  setStatus('Arduino 연결 중...');
+  const r = await fetch('/api/arduino/connect', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({port, baudrate: baud})
+  });
+  const d = await r.json();
+  if (d.ok) {
+    document.getElementById('badge-ard').textContent = `Arduino: ${d.port}`;
+    document.getElementById('badge-ard').className = 'badge on';
+    document.getElementById('btn-ard-connect').style.display = 'none';
+    document.getElementById('btn-ard-disconnect').style.display = '';
+    addLog(`Arduino 연결: ${d.port}`);
+    setStatus('Arduino 연결됨');
+  } else {
+    const ports = (d.available_ports || []).join(', ') || '없음';
+    alert(`Arduino 연결 실패: ${d.msg}\n사용 가능한 포트: ${ports}`);
+    setStatus('Arduino 연결 실패');
+  }
+}
+
+async function ardDisconnect() {
+  await fetch('/api/arduino/disconnect', {method:'POST'});
+  document.getElementById('badge-ard').textContent = 'Arduino 미연결';
+  document.getElementById('badge-ard').className = 'badge';
+  document.getElementById('btn-ard-connect').style.display = '';
+  document.getElementById('btn-ard-disconnect').style.display = 'none';
+}
+
+async function detectPort() {
+  const r = await fetch('/api/ports');
+  const d = await r.json();
+  if (d.auto_detected) {
+    document.getElementById('ard-port').value = d.auto_detected;
+    addLog(`포트 자동 감지: ${d.auto_detected}`);
+  } else {
+    const list = (d.ports || []).map(p => `${p.device} (${p.description})`).join('\n') || '없음';
+    alert(`자동 감지 실패\n사용 가능한 포트:\n${list}`);
+  }
+}
+
+// ── 단일 촬영 ──
+async function doCapture() {
+  document.getElementById('btn-capture').disabled = true;
+  setStatus('촬영 중...');
+  try {
+    const r = await fetch('/api/capture', {method:'POST'});
+    const d = await r.json();
+    if (d.ok) {
+      updateCapture(d);
+      updateImages();
+    } else {
+      alert('촬영 실패: ' + (d.msg || ''));
+    }
+  } finally {
+    document.getElementById('btn-capture').disabled = false;
+    setStatus('촬영 완료');
+  }
+}
+
+function updateCapture(d) {
+  // 열화상
+  if (d.img_b64) {
+    document.getElementById('thermal-img').src = 'data:image/png;base64,' + d.img_b64;
+    document.getElementById('thermal-img').style.display = '';
+    document.getElementById('thermal-placeholder').style.display = 'none';
+  }
+  // 실화상
+  if (d.visual_b64) {
+    document.getElementById('visual-img').src = 'data:image/png;base64,' + d.visual_b64;
+    document.getElementById('visual-img').style.display = '';
+    document.getElementById('visual-placeholder').style.display = 'none';
+  }
+  // 온도 통계
+  if (d.temp_max  !== undefined) document.getElementById('s-max').textContent = d.temp_max.toFixed(1);
+  if (d.temp_min  !== undefined) document.getElementById('s-min').textContent = d.temp_min.toFixed(1);
+  if (d.temp_mean !== undefined) document.getElementById('s-avg').textContent = d.temp_mean.toFixed(1);
+  if (d.temp_median!== undefined)document.getElementById('s-med').textContent = d.temp_median.toFixed(1);
+  // 해상도
+  if (d.width) document.getElementById('info-res').textContent = `${d.width}×${d.height}`;
+  // 타임스탬프
+  document.getElementById('last-ts').textContent = '촬영 시각: ' + (d.timestamp || '');
+  // Arduino 데이터
+  if (d.arduino) updateArduinoUI(d.arduino);
+}
+
+// ── 자동 촬영 ──
+async function autoStart() {
+  const interval = parseFloat(document.getElementById('auto-interval').value) || 60;
+  const countVal = document.getElementById('auto-count').value.trim();
+  const total    = countVal ? parseInt(countVal) : null;
+
+  const r = await fetch('/api/auto/start', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({interval, total})
+  });
+  const d = await r.json();
+  if (d.ok) {
+    autoRunning = true; autoTotal = total;
+    document.getElementById('btn-auto-start').style.display = 'none';
+    document.getElementById('btn-auto-stop').style.display  = '';
+    document.getElementById('btn-capture').disabled = true;
+    setStatus(`자동 촬영 중 (${interval}s 간격)`);
+  } else {
+    alert(d.msg);
+  }
+}
+
+async function autoStop() {
+  await fetch('/api/auto/stop', {method:'POST'});
+  autoRunning = false;
+  document.getElementById('btn-auto-start').style.display = '';
+  document.getElementById('btn-auto-stop').style.display  = 'none';
+  document.getElementById('btn-capture').disabled = false;
+  setStatus('자동 촬영 중지');
+}
+
+// ── 스트리밍 ──
+async function streamStart() {
+  const fps = parseFloat(document.getElementById('stream-fps').value) || 2;
+  const r = await fetch('/api/stream/start', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({fps})
+  });
+  const d = await r.json();
+  if (d.ok) {
+    streaming = true;
+    document.getElementById('btn-stream-start').style.display = 'none';
+    document.getElementById('btn-stream-stop').style.display  = '';
+    document.getElementById('btn-capture').disabled = true;
+    document.getElementById('btn-auto-start').disabled = true;
+    switchTab('stream');
+    document.getElementById('stream-img').src = '/api/stream/feed?' + Date.now();
+    setStatus(`스트리밍 ${fps} FPS`);
+  } else {
+    alert('스트리밍 시작 실패: ' + (d.msg || ''));
+  }
+}
+
+async function streamStop() {
+  await fetch('/api/stream/stop', {method:'POST'});
+  streaming = false;
+  document.getElementById('btn-stream-start').style.display = '';
+  document.getElementById('btn-stream-stop').style.display  = 'none';
+  document.getElementById('btn-capture').disabled = false;
+  document.getElementById('btn-auto-start').disabled = false;
+  document.getElementById('stream-img').src = '';
+  setStatus('스트리밍 중지');
+}
+
+// ── Arduino UI 갱신 ──
+function updateArduinoUI(d) {
+  if (!d) return;
+  const fmt = v => v !== null && v !== undefined ? v.toFixed(2) : '—';
+  document.getElementById('a-tc1').textContent = fmt(d.tc1);
+  document.getElementById('a-tc2').textContent = fmt(d.tc2);
+  document.getElementById('a-cj1').textContent = fmt(d.cj1);
+  document.getElementById('a-cj2').textContent = fmt(d.cj2);
+  document.getElementById('a-air').textContent = fmt(d.air_temp);
+  document.getElementById('a-rh').textContent  = d.humidity !== null && d.humidity !== undefined
+                                                   ? d.humidity.toFixed(1) : '—';
+  document.getElementById('a-time').textContent = '수신: ' + (d.time || d.received || '');
+}
+
+// ── 이미지 갤러리 갱신 ──
+async function updateImages() {
+  const r = await fetch('/api/images');
+  const d = await r.json();
+  const box = document.getElementById('gallery');
+  box.innerHTML = '';
+  (d.items || []).forEach(it => {
+    const el = document.createElement('div');
+    el.className = 'gal-item';
+    el.innerHTML = `<img src="${it.url}" loading="lazy">
+      <div class="meta">
+        <div class="name">${it.name}</div>
+        <div class="time">${it.mtime}</div>
+      </div>`;
+    el.onclick = () => {
+      document.getElementById('thermal-img').src = it.url;
+      document.getElementById('thermal-img').style.display = '';
+      document.getElementById('thermal-placeholder').style.display = 'none';
+      switchTab('thermal');
+    };
+    box.appendChild(el);
+  });
+}
+
+// ── 폴링 ──
+async function pollStatus() {
+  try {
+    const r = await fetch('/api/status');
+    const d = await r.json();
+
+    // 자동 촬영 상태 동기화
+    if (autoRunning && !d.auto_running) {
+      autoRunning = false;
+      document.getElementById('btn-auto-start').style.display = '';
+      document.getElementById('btn-auto-stop').style.display  = 'none';
+      document.getElementById('btn-capture').disabled = false;
+    }
+    if (d.auto_running) {
+      const total = d.auto_total ? `/ ${d.auto_total}` : '';
+      document.getElementById('auto-status').textContent =
+        `${d.auto_count}${total}장 촬영됨`;
+
+      // 진행 바
+      if (d.auto_total) {
+        document.getElementById('progress-inner').style.width =
+          Math.min(d.auto_count / d.auto_total * 100, 100) + '%';
+      } else {
+        // 경과 시간 기반 애니메이션
+        const pct = ((Date.now() / 1000) % d.auto_interval) / d.auto_interval * 100;
+        document.getElementById('progress-inner').style.width = pct + '%';
+      }
+    } else {
+      document.getElementById('auto-status').textContent = '';
+      if (!d.auto_running) document.getElementById('progress-inner').style.width = '0%';
+    }
+
+    // 스트리밍 통계 (라이브 탭에서)
+    if (d.stream_stats) {
+      const s = d.stream_stats;
+      document.getElementById('s-max').textContent = s.temp_max.toFixed(1);
+      document.getElementById('s-min').textContent = s.temp_min.toFixed(1);
+      document.getElementById('s-avg').textContent = s.temp_mean.toFixed(1);
+      document.getElementById('s-med').textContent = s.temp_median.toFixed(1);
+    }
+
+    // Arduino 폴링
+    if (d.ard_connected && d.arduino) {
+      updateArduinoUI(d.arduino);
+    }
+
+    // 로그
+    updateLog(d.logs || []);
+  } catch(_) {}
+}
+
+let _logLast = '';
+function updateLog(logs) {
+  const sig = logs.join('|');
+  if (sig === _logLast) return;
+  _logLast = sig;
+  const box = document.getElementById('log-box');
+  box.innerHTML = logs.map(l => `<div>${l}</div>`).join('');
+  box.scrollTop = box.scrollHeight;
+}
+
+function addLog(msg) {
+  const ts = new Date().toLocaleTimeString();
+  const box = document.getElementById('log-box');
+  const el = document.createElement('div');
+  el.textContent = `[${ts}] ${msg}`;
+  box.appendChild(el);
+  box.scrollTop = box.scrollHeight;
+}
+
+function setStatus(msg) {
+  document.getElementById('status-text').textContent = msg;
+}
+
+// ── 시작 ──
+updateImages();
+setInterval(pollStatus, 2000);       // 2초마다 상태 폴링
+setInterval(async () => {           // 5초마다 Arduino 최신값 갱신
+  if (!document.getElementById('badge-ard').classList.contains('on')) return;
+  const r = await fetch('/api/arduino/latest');
+  const d = await r.json();
+  if (d.data) updateArduinoUI(d.data);
+}, 3000);
+</script>
+</body>
+</html>
