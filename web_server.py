@@ -19,6 +19,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from jinja2 import FileSystemLoader, Environment
 
 from camera import FlirA70Camera
 from arduino_reader import ArduinoReader, find_arduino_port
@@ -31,7 +32,8 @@ BASE_DIR     = Path(__file__).parent
 CAPTURED_DIR = BASE_DIR / "captured"
 CAPTURED_DIR.mkdir(exist_ok=True)
 
-templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+_jinja_env = Environment(loader=FileSystemLoader(str(BASE_DIR / "templates"), encoding="utf-8"))
+templates = Jinja2Templates(env=_jinja_env)
 app.mount("/captured", StaticFiles(directory=str(CAPTURED_DIR)), name="captured")
 
 # ─────────────────────────────────────────────
