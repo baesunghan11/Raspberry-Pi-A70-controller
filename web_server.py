@@ -31,7 +31,8 @@ BASE_DIR     = Path(__file__).parent
 CAPTURED_DIR = BASE_DIR / "captured"
 CAPTURED_DIR.mkdir(exist_ok=True)
 
-templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"), autoescape=False)
+templates.env.encoding = "utf-8"
 app.mount("/captured", StaticFiles(directory=str(CAPTURED_DIR)), name="captured")
 
 # ─────────────────────────────────────────────
@@ -231,7 +232,7 @@ def _auto_thread(interval: float, total: "int | None"):
 # ─────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse(request=request, name="index.html")
+    return templates.TemplateResponse(request=request, name="index.html", media_type="text/html; charset=utf-8")
 
 
 # ── 카메라 ──
